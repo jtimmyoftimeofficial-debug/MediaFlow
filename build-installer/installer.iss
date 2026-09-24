@@ -4,8 +4,8 @@
 #define MyAppName "MediaFlow"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "MediaFlow"
-#define MyAppURL "https://github.com"
-#define MyAppExeName "MediaFlow.vbs"
+#define MyAppURL "https://github.com/jtimmyoftimeofficial-debug/MediaFlow"
+#define MyAppExeName "MediaFlow.exe"
 
 [Setup]
 AppId={{C47291A6-B647-497B-8A87-99E85827C429}
@@ -37,9 +37,13 @@ Source: "app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createall
 Source: "assets\app.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#MyAppExeName}"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"
-Name: "{autoprograms}\Stop {#MyAppName}"; Filename: "{app}\StopMediaFlow.bat"; WorkingDir: "{app}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#MyAppExeName}"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"
+Name: "{autoprograms}\Stop {#MyAppName}"; Filename: "{app}\StopMediaFlow.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{sys}\wscript.exe"; Parameters: """{app}\{#MyAppExeName}"""; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{app}\StopMediaFlow.exe"; Parameters: "--quiet"; Flags: runhidden waituntilterminated
+

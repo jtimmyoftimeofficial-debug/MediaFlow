@@ -8,9 +8,20 @@ import type { MediaMetadata, MediaFormat, PlatformId } from '../../shared/types.
 
 const execFileAsync = promisify(execFile);
 
-// Auto-discover WinGet packages (yt-dlp, FFmpeg) on Windows so PATH is always guaranteed
+// Auto-discover bundled bin directory and WinGet packages on Windows so PATH is always guaranteed
 function ensureExtractorBinariesInPath(): void {
   if (process.platform === 'win32') {
+    const possibleBinDirs = [
+      path.resolve(process.cwd(), 'bin'),
+      path.dirname(process.execPath),
+      path.resolve(process.cwd(), '../bin')
+    ];
+    for (const b of possibleBinDirs) {
+      if (fs.existsSync(b)) {
+        process.env.PATH = `${b};${process.env.PATH}`;
+      }
+    }
+
     const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local') : '');
     if (localAppData) {
       const wingetDir = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');

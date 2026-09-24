@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import dotenv from 'dotenv';
 import { defaultAdapterRegistry } from './adapters/AdapterRegistry.js';
@@ -12,8 +13,19 @@ import { PlatformError, UnsupportedPlatformError, PlatformPolicyError } from './
 
 dotenv.config();
 
-// Ensure User PATH packages (winget yt-dlp, ffmpeg) are loaded into environment
+// Ensure local bundled bin directory and WinGet packages are on PATH
 if (process.platform === 'win32') {
+  const possibleBinDirs = [
+    path.resolve(process.cwd(), 'bin'),
+    path.dirname(process.execPath),
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../bin')
+  ];
+  for (const b of possibleBinDirs) {
+    if (fs.existsSync(b)) {
+      process.env.PATH = `${b};${process.env.PATH}`;
+    }
+  }
+
   const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || 'C:\\Users\\User', 'AppData', 'Local');
   const wingetPackages = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
   if (fs.existsSync(wingetPackages)) {
@@ -30,10 +42,23 @@ if (process.platform === 'win32') {
 
 const app = express();
 const PORT = Number.parseInt(process.env.PORT || '3001', 10);
-const HOST = process.env.HOST || '0.0.0.0';
-const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || './downloads';
-const MAX_BYTES = Number.parseInt(process.env.MAX_DOWNLOAD_SIZE_BYTES || '2147483648', 10);
+const HOST = process.env.HOST || '127.0.0.1';
 
+// Default to user's real Windows Downloads folder if available
+const userDownloads = process.platform === 'win32' && process.env.USERPROFILE
+  ? path.join(process.env.USERPROFILE, 'Downloads')
+  : path.resolve('./downloads');
+const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || userDownloads;
+
+try {
+  if (!fs.existsSync(DOWNLOAD_DIR)) {
+    fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
+  }
+} catch {
+  // fallback if permissions issue
+}
+
+const MAX_BYTES = Number.parseInt(process.env.MAX_DOWNLOAD_SIZE_BYTES || '2147483648', 10);
 const downloadEngine = new DownloadEngine(DOWNLOAD_DIR, MAX_BYTES);
 
 app.use(cors());
@@ -250,7 +275,10 @@ app.get('/api/settings', (_req, res) => {
 });
 
 // 8. Serve Client in production
-const clientDist = path.resolve(process.cwd(), 'dist/client');
+const candidate1 = path.resolve(process.cwd(), 'dist/client');
+const candidate2 = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../client');
+const clientDist = fs.existsSync(candidate1) ? candidate1 : candidate2;
+
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => {
@@ -258,12 +286,31 @@ if (fs.existsSync(clientDist)) {
   });
 }
 
+// Prevent pipe close crashes (e.g. when launched from Windows wrappers or services)
+process.on('uncaughtException', (err: any) => {
+  if (err?.code === 'EPIPE') {
+    return;
+  }
+  console.error('[Fatal Error]', err);
+});
+
 // Start server
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, HOST, () => {
-    console.log(`[Server] Social Media Video Downloader running at http://${HOST}:${PORT}`);
+    console.log(`[Server] MediaFlow running at http://${HOST}:${PORT}`);
     console.log(`[Server] Download directory configured to: ${downloadEngine.getDownloadDir()}`);
   });
+
+  // Also bind to IPv6 loopback [::1] if HOST is 127.0.0.1 so http://localhost:3001 works seamlessly on IPv6 Windows machines
+  if (HOST === '127.0.0.1') {
+    import('node:http').then(({ createServer }) => {
+      const v6Server = createServer(app);
+      v6Server.on('error', () => {
+        // IPv6 loopback not supported or already bound, safe to ignore
+      });
+      v6Server.listen(PORT, '::1');
+    }).catch(() => {});
+  }
 }
 
 export { app, downloadEngine };
