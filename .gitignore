@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 dist-installer/
+build-installer/app/
 build/
 
 # Media Downloads & Temporary Files
