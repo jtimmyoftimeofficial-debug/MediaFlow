@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-installer/
+build/
+
+# Media Downloads & Temporary Files
+downloads/
+*.part*
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# IDE and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
