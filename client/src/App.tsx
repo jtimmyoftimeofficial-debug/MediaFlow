@@ -5,12 +5,15 @@ import { MediaPreviewCard } from './components/MediaPreviewCard';
 import { DownloadProgressCard } from './components/DownloadProgressCard';
 import { DownloadHistory } from './components/DownloadHistory';
 import { PermittedUseModal } from './components/PermittedUseModal';
+import { SettingsModal } from './components/SettingsModal';
+import { UpdateBanner } from './components/UpdateBanner';
 import type { 
   AppSettings, 
   PlatformAdapterInfo, 
   MediaMetadata, 
   DownloadProgress, 
-  DownloadHistoryItem 
+  DownloadHistoryItem,
+  UpdateInfo
 } from '@shared/types';
 
 export const App: React.FC = () => {
@@ -27,10 +30,15 @@ export const App: React.FC = () => {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [isPermittedUseOpen, setIsPermittedUseOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   const progressIntervalRef = useRef<number | null>(null);
 
-  // Load initial settings, platforms, and history
+  // Load initial settings, platforms, history, and update check
   useEffect(() => {
     fetch('/api/settings')
       .then(res => res.json())
@@ -43,7 +51,27 @@ export const App: React.FC = () => {
       .catch(err => console.warn('Could not load platforms:', err));
 
     loadHistory();
+    checkForUpdates();
   }, []);
+
+  const checkForUpdates = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const res = await fetch('/api/updates/check');
+      if (res.ok) {
+        const data: UpdateInfo = await res.json();
+        setUpdateInfo(data);
+      }
+    } catch (err) {
+      console.warn('Could not check for software updates:', err);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleUpdateSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+  };
 
   const loadHistory = async () => {
     try {
@@ -97,7 +125,8 @@ export const App: React.FC = () => {
         body: JSON.stringify({
           url: inspectedMedia.url,
           formatId,
-          customTitle
+          customTitle,
+          destinationDir: settings?.downloadDir
         })
       });
 
@@ -191,7 +220,17 @@ export const App: React.FC = () => {
       <Header
         settings={settings}
         onOpenPermittedUse={() => setIsPermittedUseOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        updateInfo={updateInfo}
       />
+
+      {updateInfo?.hasUpdate && !isBannerDismissed && (
+        <UpdateBanner
+          updateInfo={updateInfo}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onDismiss={() => setIsBannerDismissed(true)}
+        />
+      )}
 
       <main style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {/* 1. URL Input & Platform quick examples */}
@@ -208,6 +247,8 @@ export const App: React.FC = () => {
             metadata={inspectedMedia}
             onStartDownload={handleStartDownload}
             isStarting={isStartingDownload}
+            downloadDir={settings?.downloadDir}
+            onOpenSettings={() => setIsSettingsOpen(true)}
           />
         )}
 
@@ -232,6 +273,17 @@ export const App: React.FC = () => {
       <PermittedUseModal
         isOpen={isPermittedUseOpen}
         onClose={() => setIsPermittedUseOpen(false)}
+      />
+
+      {/* Settings & Preferences Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+        updateInfo={updateInfo}
+        isCheckingUpdate={isCheckingUpdate}
+        onCheckForUpdates={checkForUpdates}
       />
     </div>
   );

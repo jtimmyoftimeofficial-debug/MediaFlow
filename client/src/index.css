@@ -794,3 +794,26 @@ h1, h2, h3, h4, h5, h6 {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+@keyframes slideDown {
+  from { 
+    opacity: 0; 
+    transform: translateY(-12px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+.interactive-badge {
+  transition: all var(--transition-fast);
+}
+
+.interactive-badge:hover {
+  background: rgba(99, 102, 241, 0.25) !important;
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+  transform: translateY(-1px);
+}
+

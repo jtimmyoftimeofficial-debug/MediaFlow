@@ -2,7 +2,7 @@
 ; Generates a self-contained, native desktop application installer
 
 #define MyAppName "MediaFlow"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "MediaFlow"
 #define MyAppURL "https://github.com/jtimmyoftimeofficial-debug/MediaFlow"
 #define MyAppExeName "MediaFlow.exe"
@@ -18,7 +18,7 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={userpf}\{#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist-installer
-OutputBaseFilename=MediaFlow-Setup-1.0.0
+OutputBaseFilename=MediaFlow-Setup-1.1.0
 SetupIconFile=assets\app.ico
 Compression=lzma2/ultra64
 SolidCompression=yes

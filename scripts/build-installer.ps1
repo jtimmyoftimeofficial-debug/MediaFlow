@@ -35,6 +35,9 @@ if (Test-Path "$staging\resources\default_app.asar") {
 
 # 4. Brand MediaFlow.exe with custom application icon & metadata using rcedit
 Write-Host "4. Customizing executable branding and icon..." -ForegroundColor Yellow
+$pkg = Get-Content "package.json" | ConvertFrom-Json
+$appVersion = $pkg.version
+
 $rcedit = "node_modules\rcedit\bin\rcedit.exe"
 if (Test-Path $rcedit) {
     & $rcedit "$staging\MediaFlow.exe" `
@@ -42,8 +45,8 @@ if (Test-Path $rcedit) {
         --set-version-string "FileDescription" "MediaFlow - Social Media Video Downloader" `
         --set-version-string "ProductName" "MediaFlow" `
         --set-version-string "CompanyName" "MediaFlow" `
-        --set-product-version "1.0.0" `
-        --set-file-version "1.0.0"
+        --set-product-version "$appVersion" `
+        --set-file-version "$appVersion"
 }
 
 # 5. Stage application package inside resources/app
@@ -112,4 +115,4 @@ if (-not $iscc) {
 & $isccPath "build-installer\installer.iss"
 
 Write-Host "`nStandalone Native Windows Application installer built successfully!" -ForegroundColor Green
-Get-Item "dist-installer\MediaFlow-Setup-1.0.0.exe" | Format-List Name, Length, LastWriteTime
+Get-Item "dist-installer\MediaFlow-Setup-$appVersion.exe" | Format-List Name, Length, LastWriteTime

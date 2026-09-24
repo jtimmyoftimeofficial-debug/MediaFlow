@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Download, ShieldAlert, CheckCircle2, Film, User, Scale, Clock, Edit2 } from 'lucide-react';
+import { Download, ShieldAlert, CheckCircle2, Film, User, Scale, Clock, Edit2, Folder } from 'lucide-react';
 import type { MediaMetadata } from '@shared/types';
 
 interface MediaPreviewCardProps {
   metadata: MediaMetadata;
   onStartDownload: (formatId: string, customTitle?: string) => Promise<void>;
   isStarting: boolean;
+  downloadDir?: string;
+  onOpenSettings?: () => void;
 }
 
 function formatBytes(bytes?: number): string {
@@ -27,7 +29,9 @@ function formatDuration(seconds?: number): string {
 export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
   metadata,
   onStartDownload,
-  isStarting
+  isStarting,
+  downloadDir,
+  onOpenSettings
 }) => {
   const [selectedFormatId, setSelectedFormatId] = useState<string>(
     metadata.formats[0]?.id || ''
@@ -183,7 +187,40 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
                 })}
               </div>
 
-              <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* Destination Folder Indicator & Picker */}
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between', 
+                  padding: '8px 12px', 
+                  background: 'rgba(255, 255, 255, 0.03)', 
+                  borderRadius: 'var(--radius-sm)', 
+                  border: '1px solid var(--border-subtle)', 
+                  marginTop: '12px',
+                  fontSize: '12.5px' 
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+                  <Folder size={14} color="var(--info)" />
+                  <span>Saving to:</span>
+                  <span style={{ color: 'var(--text-main)', fontWeight: 500, maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {downloadDir || 'Downloads'}
+                  </span>
+                </div>
+                {onOpenSettings && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={onOpenSettings}
+                    style={{ padding: '3px 8px', fontSize: '11.5px', color: 'var(--accent-primary)', height: 'auto' }}
+                  >
+                    Change Folder
+                  </button>
+                )}
+              </div>
+
+              <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button
                   type="button"
                   className="btn btn-primary"

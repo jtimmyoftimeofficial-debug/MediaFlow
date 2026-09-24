@@ -44,11 +44,42 @@ const app = express();
 const PORT = Number.parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '127.0.0.1';
 
+const APP_VERSION = '1.1.0';
+
+// Config persistence in %LOCALAPPDATA%\MediaFlow\config.json
+const CONFIG_DIR = process.platform === 'win32'
+  ? path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || 'C:\\Users\\User', 'AppData', 'Local'), 'MediaFlow')
+  : path.resolve('./');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+
+function loadPersistedSettings(): { downloadDir?: string } {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const content = fs.readFileSync(CONFIG_FILE, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch {}
+  return {};
+}
+
+function savePersistedSettings(settings: { downloadDir?: string }) {
+  try {
+    if (!fs.existsSync(CONFIG_DIR)) {
+      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    }
+    const current = loadPersistedSettings();
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ ...current, ...settings }, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Settings] Failed to save config.json:', err);
+  }
+}
+
 // Default to user's real Windows Downloads folder if available
 const userDownloads = process.platform === 'win32' && process.env.USERPROFILE
   ? path.join(process.env.USERPROFILE, 'Downloads')
   : path.resolve('./downloads');
-const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || userDownloads;
+const persistedSettings = loadPersistedSettings();
+const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || persistedSettings.downloadDir || userDownloads;
 
 try {
   if (!fs.existsSync(DOWNLOAD_DIR)) {
@@ -136,7 +167,8 @@ app.post('/api/media/inspect', async (req, res) => {
 const StartDownloadSchema = z.object({
   url: z.string().url(),
   formatId: z.string().min(1),
-  customTitle: z.string().optional()
+  customTitle: z.string().optional(),
+  destinationDir: z.string().optional()
 });
 
 app.post('/api/download/start', async (req, res) => {
@@ -147,7 +179,14 @@ app.post('/api/download/start', async (req, res) => {
       return;
     }
 
-    const { url, formatId, customTitle } = parseResult.data;
+    const { url, formatId, customTitle, destinationDir } = parseResult.data;
+    if (destinationDir && typeof destinationDir === 'string' && destinationDir.trim().length > 0) {
+      const resolvedTarget = path.resolve(destinationDir.trim());
+      if (!fs.existsSync(resolvedTarget)) {
+        try { fs.mkdirSync(resolvedTarget, { recursive: true }); } catch {}
+      }
+      downloadEngine.setDownloadDir(resolvedTarget);
+    }
     const validatedUrl = await validateUrlSafety(url);
 
     const adapter = defaultAdapterRegistry.getAdapter(validatedUrl);
@@ -270,8 +309,154 @@ app.get('/api/settings', (_req, res) => {
   res.json({
     downloadDir: downloadEngine.getDownloadDir(),
     maxDownloadSizeBytes: downloadEngine.getMaxSizeBytes(),
-    version: '1.0.0'
+    version: APP_VERSION
   });
+});
+
+app.post('/api/settings', (req, res) => {
+  try {
+    const { downloadDir } = req.body;
+    if (typeof downloadDir === 'string' && downloadDir.trim().length > 0) {
+      const resolved = path.resolve(downloadDir.trim());
+      if (!fs.existsSync(resolved)) {
+        fs.mkdirSync(resolved, { recursive: true });
+      }
+      downloadEngine.setDownloadDir(resolved);
+      savePersistedSettings({ downloadDir: resolved });
+      res.json({
+        success: true,
+        settings: {
+          downloadDir: downloadEngine.getDownloadDir(),
+          maxDownloadSizeBytes: downloadEngine.getMaxSizeBytes(),
+          version: APP_VERSION
+        }
+      });
+      return;
+    }
+    res.status(400).json({ error: 'Valid download directory path is required' });
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to update download directory: ${err.message}` });
+  }
+});
+
+// Native folder picker for choosing download destination
+app.post('/api/settings/browse-folder', async (_req, res) => {
+  if (process.platform === 'win32') {
+    try {
+      const { exec } = await import('node:child_process');
+      const psCommand = `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select MediaFlow Download Folder'; $f.ShowNewFolderButton = $true; if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.SelectedPath }"`;
+      
+      exec(psCommand, (err, stdout) => {
+        if (err || !stdout || stdout.trim().length === 0) {
+          // User cancelled or dialog failed
+          res.json({ selectedDir: null, currentDir: downloadEngine.getDownloadDir() });
+          return;
+        }
+        const selected = stdout.trim();
+        if (fs.existsSync(selected)) {
+          downloadEngine.setDownloadDir(selected);
+          savePersistedSettings({ downloadDir: selected });
+          res.json({ selectedDir: selected, currentDir: selected });
+        } else {
+          res.json({ selectedDir: null, currentDir: downloadEngine.getDownloadDir() });
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: `Could not open folder picker: ${err.message}` });
+    }
+  } else {
+    res.json({ selectedDir: null, currentDir: downloadEngine.getDownloadDir(), message: 'Folder picker dialog available on Windows' });
+  }
+});
+
+// Open download folder directly in Windows File Explorer
+app.post('/api/settings/open-folder', async (req, res) => {
+  try {
+    const targetDir = req.body?.folder || downloadEngine.getDownloadDir();
+    const resolved = path.resolve(targetDir);
+    if (!fs.existsSync(resolved)) {
+      fs.mkdirSync(resolved, { recursive: true });
+    }
+
+    const { exec } = await import('node:child_process');
+    if (process.platform === 'win32') {
+      exec(`explorer.exe "${resolved}"`);
+    } else if (process.platform === 'darwin') {
+      exec(`open "${resolved}"`);
+    } else {
+      exec(`xdg-open "${resolved}"`);
+    }
+    res.json({ success: true, openedPath: resolved });
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to open folder: ${err.message}` });
+  }
+});
+
+// GitHub Release Update Checker
+export function isVersionNewer(latest: string, current: string): boolean {
+  const cleanLatest = latest.replace(/^v/, '').trim();
+  const cleanCurrent = current.replace(/^v/, '').trim();
+  const lParts = cleanLatest.split('.').map(n => Number.parseInt(n, 10) || 0);
+  const cParts = cleanCurrent.split('.').map(n => Number.parseInt(n, 10) || 0);
+
+  for (let i = 0; i < Math.max(lParts.length, cParts.length); i++) {
+    const l = lParts[i] || 0;
+    const c = cParts[i] || 0;
+    if (l > c) return true;
+    if (l < c) return false;
+  }
+  return false;
+}
+
+app.get('/api/updates/check', async (_req, res) => {
+  try {
+    const response = await fetch('https://api.github.com/repos/jtimmyoftimeofficial-debug/MediaFlow/releases/latest', {
+      headers: {
+        'User-Agent': 'MediaFlow-Desktop-App',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if (!response.ok) {
+      res.json({
+        currentVersion: APP_VERSION,
+        latestVersion: APP_VERSION,
+        hasUpdate: false,
+        releaseUrl: 'https://github.com/jtimmyoftimeofficial-debug/MediaFlow/releases',
+        message: 'Could not fetch latest release information.'
+      });
+      return;
+    }
+
+    const data: any = await response.json();
+    const latestVersion = data.tag_name || APP_VERSION;
+    const hasUpdate = isVersionNewer(latestVersion, APP_VERSION);
+
+    // Locate setup installer asset if available
+    const assets = Array.isArray(data.assets) ? data.assets : [];
+    const installerAsset = assets.find((a: any) => a.name?.endsWith('.exe') || a.name?.includes('Setup'));
+    const downloadUrl = installerAsset?.browser_download_url || data.html_url;
+
+    res.json({
+      currentVersion: APP_VERSION,
+      latestVersion,
+      hasUpdate,
+      releaseUrl: data.html_url || 'https://github.com/jtimmyoftimeofficial-debug/MediaFlow/releases',
+      downloadUrl,
+      releaseName: data.name || latestVersion,
+      releaseNotes: data.body || '',
+      publishedAt: data.published_at
+    });
+  } catch (err: any) {
+    console.warn('[Updates] Failed to check GitHub releases:', err.message);
+    res.json({
+      currentVersion: APP_VERSION,
+      latestVersion: APP_VERSION,
+      hasUpdate: false,
+      releaseUrl: 'https://github.com/jtimmyoftimeofficial-debug/MediaFlow/releases',
+      error: err.message
+    });
+  }
 });
 
 // 8. Serve Client in production

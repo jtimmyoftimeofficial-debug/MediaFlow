@@ -82,10 +82,22 @@ export interface StartDownloadRequest {
   url: string;
   formatId: string;
   customFilename?: string;
+  destinationDir?: string;
 }
 
 export interface AppSettings {
   downloadDir: string;
   maxDownloadSizeBytes: number;
   version: string;
+}
+
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  hasUpdate: boolean;
+  releaseUrl: string;
+  downloadUrl?: string;
+  releaseName?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
 }
