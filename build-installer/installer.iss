@@ -1,5 +1,5 @@
-; Inno Setup Script for MediaFlow
-; Generates a modern, self-contained Windows setup executable
+; Inno Setup Script for MediaFlow Standalone Windows Application
+; Generates a self-contained, native desktop application installer
 
 #define MyAppName "MediaFlow"
 #define MyAppVersion "1.0.0"
@@ -38,12 +38,10 @@ Source: "assets\app.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"
-Name: "{autoprograms}\Stop {#MyAppName}"; Filename: "{app}\StopMediaFlow.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{app}\StopMediaFlow.exe"; Parameters: "--quiet"; Flags: runhidden waituntilterminated
-
+Filename: "taskkill"; Parameters: "/F /IM MediaFlow.exe"; Flags: runhidden waituntilterminated
